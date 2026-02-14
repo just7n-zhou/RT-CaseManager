@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { pool } from "./db";
+import { seed } from "./seed";
+import { casesRouter } from "./routes/cases.routes";
 
 const app = express();
 app.use(cors());
@@ -12,37 +14,18 @@ app.get("/health", async (_req, res) => {
   res.json({ ok: true, db: r.rows[0].ok });
 });
 
-/* ------------------------------
-   CASE ROUTES
---------------------------------*/
+app.use("/api/cases", casesRouter);
 
-// List all cases
-app.get("/api/cases", async (_req, res) => {
-  const result = await pool.query(
-    "SELECT * FROM cases ORDER BY created_at DESC"
-  );
-  res.json(result.rows);
-});
+const port = Number(process.env.PORT);
 
-// Create a case
-app.post("/api/cases", async (req, res) => {
-  const { clientName, status } = req.body;
+async function start() {
+  // ensure DB reachable first
+  await pool.query("select 1");
+  await seed(); // seed initial data
+  app.listen(port, () => console.log(`API running at http://localhost:${port}`));
+}
 
-  if (!clientName) {
-    return res.status(400).json({ error: "clientName is required" });
-  }
-
-  const id = crypto.randomUUID?.() ?? String(Date.now());
-
-  const result = await pool.query(
-    "INSERT INTO cases (id, client_name, status) VALUES ($1, $2, $3) RETURNING *",
-    [id, clientName, status ?? "active"]
-  );
-
-  res.status(201).json(result.rows[0]);
-});
-
-const port = Number(process.env.PORT ?? 4000);
-app.listen(port, () => {
-  console.log(`API running at http://localhost:${port}`);
+start().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
