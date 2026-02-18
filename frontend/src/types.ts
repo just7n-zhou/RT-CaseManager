@@ -10,5 +10,6 @@ export type Contract = {
 export type CaseRow = {
   id: string;
   client_name: string;
+  status: string;
   contracts: Contract[];
 };
