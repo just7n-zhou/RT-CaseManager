@@ -1,10 +1,11 @@
+// frontend/src/context/AgreementContext.tsx
 import React, { createContext, useContext, useMemo, useState } from "react";
-import type { Clause, Contract } from "../types";
+import type { Clause, RawAgreement } from "../types";
 
 type AgreementState = {
-  contract: Contract | null;
+  agreement: RawAgreement | null;
   clauses: Clause[];
-  setContractAndInitClauses: (c: Contract, clauseCount: number) => void;
+  setAgreementAndInitClauses: (a: RawAgreement, clauseCount: number) => void;
   updateClause: (id: string, text: string) => void;
 };
 
@@ -16,31 +17,31 @@ export function useAgreement() {
   return ctx;
 }
 
-function makeClauses(contract: Contract, count: number): Clause[] {
+function makeClauses(a: RawAgreement, count: number): Clause[] {
   return Array.from({ length: count }, (_, i) => ({
     id: String(i + 1),
-    text: `${contract.external_ref} - clause ${i + 1}`,
+    text: `${a.ref} - clause ${i + 1}`,
   }));
 }
 
 export function AgreementProvider({ children }: { children: React.ReactNode }) {
-  const [contract, setContract] = useState<Contract | null>(null);
+  const [agreement, setAgreement] = useState<RawAgreement | null>(null);
   const [clauses, setClauses] = useState<Clause[]>([]);
 
-  const setContractAndInitClauses = (c: Contract, clauseCount: number) => {
-    setContract(c);
-    setClauses(makeClauses(c, clauseCount));
+  const setAgreementAndInitClauses = (a: RawAgreement, clauseCount: number) => {
+    setAgreement(a);
+    setClauses(makeClauses(a, clauseCount));
   };
 
   const updateClause = (id: string, text: string) => {
-    // PROBLEM: updating one clause rebuilds the whole array (expensive)
+    // Problem: rebuild whole clauses array on every keystroke
     setClauses((prev) => prev.map((x) => (x.id === id ? { ...x, text } : x)));
   };
 
-  // PROBLEM: context value changes on every keystroke => all consumers rerender
+  // Problem: context value changes when clauses changes => rerender tree
   const value = useMemo(
-    () => ({ contract, clauses, setContractAndInitClauses, updateClause }),
-    [contract, clauses]
+    () => ({ agreement, clauses, setAgreementAndInitClauses, updateClause }),
+    [agreement, clauses]
   );
 
   return <AgreementContext.Provider value={value}>{children}</AgreementContext.Provider>;

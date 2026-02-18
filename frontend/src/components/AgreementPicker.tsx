@@ -1,33 +1,36 @@
-import { useEffect, useState } from "react";
+// frontend/src/components/AgreementPicker.tsx
+import { useEffect, useMemo, useState } from "react";
 import { gql } from "../api/graphql";
-import { GET_CASES_AND_CONTRACTS } from "../api/queries";
-import type { CaseRow, Contract } from "../types";
+import { GET_CASES_AND_RAW_CONTRACTS } from "../api/queries";
+import type { CaseRow, RawAgreement } from "../types";
 import { useAgreement } from "../context/AgreementContext";
 
 type QueryResult = { cases: CaseRow[] };
 
 export function AgreementPicker() {
-  const { setContractAndInitClauses } = useAgreement();
+  const { setAgreementAndInitClauses } = useAgreement();
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [clauseCount, setClauseCount] = useState(1500);
-  const [selected, setSelected] = useState<{ caseId: string; contractId: string } | null>(null);
+  const [selectedId, setSelectedId] = useState<string>("");
 
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const data = await gql<QueryResult>(GET_CASES_AND_CONTRACTS);
+        const data = await gql<QueryResult>(GET_CASES_AND_RAW_CONTRACTS);
         setCases(data.cases);
 
-        // auto-pick first available contract
-        const firstCase = data.cases.find((c) => c.contracts.length > 0);
-        const firstContract = firstCase?.contracts[0];
-        if (firstCase && firstContract) {
-          setSelected({ caseId: firstCase.id, contractId: firstContract.id });
-          setContractAndInitClauses(firstContract, clauseCount);
+        // auto pick first available agreement
+        const first = data.cases
+          .flatMap((cs) => toAgreements(cs))
+          .at(0);
+
+        if (first) {
+          setSelectedId(first.id);
+          setAgreementAndInitClauses(first, clauseCount);
         }
       } catch (e: any) {
         setError(e.message ?? "Failed to load");
@@ -38,9 +41,12 @@ export function AgreementPicker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function findContract(caseId: string, contractId: string): Contract | null {
-    const c = cases.find((x) => x.id === caseId);
-    return c?.contracts.find((k) => k.id === contractId) ?? null;
+  const agreements = useMemo(() => cases.flatMap((cs) => toAgreements(cs)), [cases]);
+
+  function onSelect(id: string) {
+    setSelectedId(id);
+    const a = agreements.find((x) => x.id === id);
+    if (a) setAgreementAndInitClauses(a, clauseCount);
   }
 
   if (loading) return <div>Loading agreements from backend...</div>;
@@ -55,10 +61,8 @@ export function AgreementPicker() {
           onChange={(e) => {
             const n = Number(e.target.value);
             setClauseCount(n);
-            if (selected) {
-              const ct = findContract(selected.caseId, selected.contractId);
-              if (ct) setContractAndInitClauses(ct, n);
-            }
+            const a = agreements.find((x) => x.id === selectedId);
+            if (a) setAgreementAndInitClauses(a, n);
           }}
           style={{ marginLeft: 8 }}
         >
@@ -71,28 +75,42 @@ export function AgreementPicker() {
       <label>
         Select agreement:
         <select
-          style={{ marginLeft: 8, minWidth: 320 }}
-          value={selected ? `${selected.caseId}::${selected.contractId}` : ""}
-          onChange={(e) => {
-            const [caseId, contractId] = e.target.value.split("::");
-            setSelected({ caseId, contractId });
-            const ct = findContract(caseId, contractId);
-            if (ct) setContractAndInitClauses(ct, clauseCount);
-          }}
+          style={{ marginLeft: 8, minWidth: 360 }}
+          value={selectedId}
+          onChange={(e) => onSelect(e.target.value)}
         >
-          {cases.flatMap((cs) =>
-            cs.contracts.map((ct) => (
-              <option key={ct.id} value={`${cs.id}::${ct.id}`}>
-                {cs.client_name} — {ct.external_ref} ({ct.status}, source {ct.source_system})
-              </option>
-            ))
-          )}
+          {agreements.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.source} — {a.ref} ({a.status})
+            </option>
+          ))}
         </select>
       </label>
 
       <span style={{ color: "#666" }}>
-        Problem version: typing rerenders the whole tree → input lag.
+        Problem backend: inconsistent fields → frontend has to deal with A vs B.
       </span>
     </div>
   );
+}
+
+// Convert one CaseRow into unified frontend “agreements”
+function toAgreements(cs: CaseRow): RawAgreement[] {
+  const a = cs.sourceAContracts.map((x) => ({
+    id: `A::${x.id}`,
+    source: "A" as const,
+    ref: x.AgreementID,
+    status: x.StatusText,
+    renewal: x.RenewalDT ?? null,
+  }));
+
+  const b = cs.sourceBContracts.map((x) => ({
+    id: `B::${x.id}`,
+    source: "B" as const,
+    ref: x.ContractRef,
+    status: x.State,
+    renewal: x.RenewalDate ?? null,
+  }));
+
+  return [...a, ...b];
 }
