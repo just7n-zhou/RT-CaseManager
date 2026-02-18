@@ -1,26 +1,32 @@
 // frontend/src/App.tsx
 import { useEffect, useState } from "react";
 
-type SourceAContract = {
+type Version = {
   id: string;
-  AgreementID: string;
-  StatusText: string;
-  RenewalDT?: string | null;
+  version_number: number;
+  status: string;
+  created_at: string;
 };
 
-type SourceBContract = {
+type VersionsPage = {
+  items: Version[];
+  nextCursor: string | null;
+};
+
+type Contract = {
   id: string;
-  ContractRef: string;
-  State: string;
-  RenewalDate?: string | null;
+  external_ref: string;
+  status: string;
+  renewal_date?: string | null;
+  source_system: string;
+  versions: VersionsPage;
 };
 
 type CaseRow = {
   id: string;
   client_name: string;
   status: string;
-  sourceAContracts: SourceAContract[];
-  sourceBContracts: SourceBContract[];
+  contracts: Contract[];
 };
 
 const QUERY = `
@@ -29,8 +35,17 @@ const QUERY = `
       id
       client_name
       status
-      sourceAContracts { id AgreementID StatusText RenewalDT }
-      sourceBContracts { id ContractRef State RenewalDate }
+      contracts {
+        id
+        external_ref
+        status
+        renewal_date
+        source_system
+        versions(limit: 5) {
+          items { id version_number status created_at }
+          nextCursor
+        }
+      }
     }
   }
 `;
@@ -71,21 +86,16 @@ export default function App() {
 
   return (
     <div style={{ padding: 16, fontFamily: "system-ui" }}>
-      <h2>GraphQL Problem Branch Demo</h2>
+      <h2>GraphQL Solution Branch Demo</h2>
       <p style={{ marginTop: 0 }}>
-        This intentionally shows inconsistent fields from different sources.
+        Stable schema: <b>Case → Contract → Version timeline</b>
       </p>
 
       <button onClick={load} disabled={loading}>
         {loading ? "Loading..." : "Reload"}
       </button>
 
-      {error && (
-        <p style={{ color: "crimson" }}>
-          Error: {error}
-        </p>
-      )}
-
+      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
       {!loading && !error && cases.length === 0 && <p>No cases found.</p>}
 
       <div style={{ marginTop: 12 }}>
@@ -100,38 +110,56 @@ export default function App() {
             }}
           >
             <div>
-              <b>{c.client_name}</b> — {c.status} <span style={{ color: "#666" }}>({c.id})</span>
+              <b>{c.client_name}</b> — {c.status}{" "}
+              <span style={{ color: "#666" }}>({c.id})</span>
             </div>
 
             <div style={{ marginTop: 10 }}>
-              <div style={{ fontWeight: 600 }}>Source A (AgreementID / StatusText)</div>
-              {c.sourceAContracts.length === 0 ? (
-                <div style={{ color: "#666" }}>No Source A contracts</div>
+              <div style={{ fontWeight: 600 }}>Contracts</div>
+              {c.contracts.length === 0 ? (
+                <div style={{ color: "#666" }}>No contracts</div>
               ) : (
-                <ul>
-                  {c.sourceAContracts.map((x) => (
-                    <li key={x.id}>
-                      AgreementID: <b>{x.AgreementID}</b>, StatusText: {x.StatusText}
-                      {x.RenewalDT ? `, RenewalDT: ${x.RenewalDT}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                c.contracts.map((ct) => (
+                  <div
+                    key={ct.id}
+                    style={{
+                      marginTop: 8,
+                      padding: 10,
+                      border: "1px solid #eee",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <div>
+                      Ref: <b>{ct.external_ref}</b> — {ct.status} — Source{" "}
+                      {ct.source_system}
+                      {ct.renewal_date ? ` — Renewal: ${ct.renewal_date}` : ""}
+                    </div>
 
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontWeight: 600 }}>Source B (ContractRef / State)</div>
-              {c.sourceBContracts.length === 0 ? (
-                <div style={{ color: "#666" }}>No Source B contracts</div>
-              ) : (
-                <ul>
-                  {c.sourceBContracts.map((x) => (
-                    <li key={x.id}>
-                      ContractRef: <b>{x.ContractRef}</b>, State: {x.State}
-                      {x.RenewalDate ? `, RenewalDate: ${x.RenewalDate}` : ""}
-                    </li>
-                  ))}
-                </ul>
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontWeight: 600 }}>Version timeline</div>
+                      {ct.versions.items.length === 0 ? (
+                        <div style={{ color: "#666" }}>No versions</div>
+                      ) : (
+                        <ul style={{ margin: "6px 0 0 18px" }}>
+                          {ct.versions.items.map((v) => (
+                            <li key={v.id}>
+                              v{v.version_number}: {v.status}{" "}
+                              <span style={{ color: "#666" }}>
+                                ({new Date(v.created_at).toLocaleString()})
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {ct.versions.nextCursor && (
+                        <div style={{ marginTop: 6, color: "#666" }}>
+                          nextCursor: {ct.versions.nextCursor}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
