@@ -1,31 +1,33 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
 import { pool } from "./db";
 import { seed } from "./seed";
-import { casesRouter } from "./routes/cases.routes";
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+import { ApolloServer } from "@apollo/server";
+import { startStandaloneServer } from "@apollo/server/standalone";
 
-app.get("/health", async (_req, res) => {
-  const r = await pool.query("select 1 as ok");
-  res.json({ ok: true, db: r.rows[0].ok });
-});
+import { typeDefs } from "./graphql/schema.problem";
+import { resolvers } from "./graphql/resolvers.problem";
 
-app.use("/api/cases", casesRouter);
-
-const port = Number(process.env.PORT);
+const gqlPort = Number(process.env.GQL_PORT ?? 4001);
 
 async function start() {
-  // ensure DB reachable first
+  // Ensure DB reachable
   await pool.query("select 1");
-  await seed(); // seed initial data
-  app.listen(port, () => console.log(`API running at http://localhost:${port}`));
+
+  // Seed initial data (idempotent)
+  await seed();
+
+  // Start GraphQL server (no Express)
+  const server = new ApolloServer({ typeDefs, resolvers });
+
+  const { url } = await startStandaloneServer(server, {
+    listen: { port: gqlPort },
+  });
+
+  console.log(`GraphQL API: ${url}graphql`);
 }
 
 start().catch((err) => {
-  console.error("Failed to start server:", err);
+  console.error("Failed to start GraphQL server:", err);
   process.exit(1);
 });
