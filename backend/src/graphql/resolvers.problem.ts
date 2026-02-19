@@ -7,7 +7,9 @@ function sleep(ms: number) {
 export const resolvers = {
   Query: {
     cases: async () => {
+      console.time("⏱ Query.cases (problem)");
       const r = await pool.query("SELECT * FROM cases ORDER BY created_at DESC");
+      console.timeEnd("⏱ Query.cases (problem)");
       return r.rows;
     },
     case: async (_: any, args: { id: string }) => {
@@ -19,11 +21,13 @@ export const resolvers = {
   Case: {
     // Problem: N+1 — for every Case row, we query each source separately
     sourceAContracts: async (parent: { id: string }) => {
+      console.time(`⏱ sourceAContracts for case ${parent.id}`);
       await sleep(80); // simulate slow upstream / messy data fetch
       const r = await pool.query(
         "SELECT id, case_id, agreement_id, status_text, renewal_dt FROM source_a_contracts WHERE case_id = $1",
         [parent.id]
       );
+      console.timeEnd(`⏱ sourceAContracts for case ${parent.id}`);
       return r.rows.map((x: any) => ({
         id: x.id,
         case_id: x.case_id,
@@ -34,11 +38,13 @@ export const resolvers = {
     },
 
     sourceBContracts: async (parent: { id: string }) => {
+      console.time(`⏱ sourceAContracts for case ${parent.id}`)
       await sleep(80);
       const r = await pool.query(
         "SELECT id, case_id, contract_ref, state, renewal_date FROM source_b_contracts WHERE case_id = $1",
         [parent.id]
       );
+      console.timeEnd(`⏱ sourceAContracts for case ${parent.id}`);
       return r.rows.map((x: any) => ({
         id: x.id,
         case_id: x.case_id,
