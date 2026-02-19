@@ -63,7 +63,6 @@ query {
   }
 }
 ```
-
 ---
 
 # How To Run
@@ -131,6 +130,10 @@ query {
   }
 }
 ```
+In terminal, run: 
+curl -s http://localhost:4001/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"query{ cases{ id client_name sourceAContracts{AgreementID StatusText} sourceBContracts{ContractRef State} } }"}' | jq
 
 Observe inconsistent fields and resolver behavior.
 
@@ -144,11 +147,34 @@ Observe inconsistent fields and resolver behavior.
 - Added keyset pagination for versions
 - Created stable abstraction layer
 
+query {
+  cases {
+    id
+    client_name
+    contracts {
+      id
+      external_ref
+      status
+      source_system
+      renewal_date
+      versions(limit: 2) {
+        items { version_number status created_at }
+        nextCursor
+      }
+    }
+  }
+}
+
 Impact:
 
 - Reduced redundant queries
 - Improved dashboard performance
 - Clean and scalable schema
+
+In terminal, run: 
+curl -s http://localhost:4001/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"query{ cases{ id client_name contracts{ id external_ref status source_system versions(limit:2){ items{version_number status created_at} nextCursor } } } }"}' | jq
 
 ---
 
