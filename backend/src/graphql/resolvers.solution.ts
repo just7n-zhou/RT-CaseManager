@@ -6,7 +6,9 @@ type Ctx = { loaders: ReturnType<typeof createLoaders> };
 export const resolvers = {
   Query: {
     cases: async () => {
+      console.time("⏱ Query.cases (solution)");
       const r = await pool.query("SELECT * FROM cases ORDER BY created_at DESC");
+      console.timeEnd("⏱ Query.cases (solution)");
       return r.rows;
     },
     case: async (_: any, args: { id: string }) => {
@@ -18,7 +20,10 @@ export const resolvers = {
   Case: {
     // ✅ Batched: ONE query for all cases in a request, not per case
     contracts: (parent: { id: string }, _: any, ctx: Ctx) => {
-      return ctx.loaders.contractsByCaseId.load(parent.id);
+      console.time(`⏱ batched contract load for case ${parent.id}`);
+      const result = ctx.loaders.contractsByCaseId.load(parent.id);
+      console.timeEnd(`⏱ batched contract load for case ${parent.id}`);
+      return result;
     },
   },
 
